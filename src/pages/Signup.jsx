@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 function isAllowedEmail(email) {
-  const adminEmail = import.meta.env.VITE_ADMIN_EMAIL
-  if (email === adminEmail) return true
+  const admins = (import.meta.env.VITE_ADMIN_EMAILS || '').split(',').map(e => e.trim())
+  if (admins.includes(email)) return true
   return email.toLowerCase().endsWith('@nespresso.com')
 }
 
