@@ -7,6 +7,7 @@ import Session from './pages/Session'
 import Summary from './pages/Summary'
 import Catalog from './pages/Catalog'
 import Admin from './pages/Admin'
+import ResetPassword from './pages/ResetPassword'
 
 function Spinner() {
   return (
@@ -37,8 +38,9 @@ export default function App() {
       <SessionProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/login"  element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
+            <Route path="/login"          element={<Login />} />
+            <Route path="/signup"         element={<Signup />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/"         element={<Session />} />
               <Route path="/summary"  element={<Summary />} />
