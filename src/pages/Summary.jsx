@@ -5,15 +5,19 @@ import { useAuth } from '../hooks/useAuth'
 import { api } from '../lib/api'
 import NavBar from '../components/NavBar'
 
-// Browsers and mail sites cap URL length, so long summaries are copied instead
-const MAX_URL_LENGTH = 1800
+// 24x24 outline icons for the action tiles
+const ICONS = {
+  print: <><path d="M6 9V3h12v6" /><path d="M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2" /><path d="M7 14h10v7H7z" /></>,
+  download: <><path d="M12 3v12m0 0-4-4m4 4 4-4" /><path d="M4 17v3h16v-3" /></>,
+  email: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></>,
+  copy: <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h8" /></>,
+}
 
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 
 export default function Summary() {
   const navigate = useNavigate()
   const { entries, clearSession } = useSession()
-  const [emailMenuOpen, setEmailMenuOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const { user } = useAuth()
   const [sendOpen, setSendOpen] = useState(false)
@@ -96,7 +100,6 @@ export default function Summary() {
   }
 
   function openSend() {
-    setEmailMenuOpen(false)
     setRecipientsText(user?.email ?? '')
     setSendError('')
     setSendResult(null)
@@ -127,35 +130,10 @@ export default function Summary() {
   }
 
   async function handleCopy() {
-    setEmailMenuOpen(false)
     setNotice((await copySummary())
-      ? 'Summary copied. Paste it into an email to get a table.'
-      : 'Could not copy. Use Download CSV instead.')
-  }
-
-  async function handleEmail(provider) {
-    setEmailMenuOpen(false)
-    const subject = encodeURIComponent(`CoffeeCounter Inventory Count — ${sessionDate}`)
-    let body = encodeURIComponent(buildPlainText())
-
-    const buildUrl = body => ({
-      mailto: `mailto:?subject=${subject}&body=${body}`,
-      gmail: `https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`,
-      outlook: `https://outlook.office.com/mail/deeplink/compose?subject=${subject}&body=${body}`,
-    })[provider]
-
-    let url = buildUrl(body)
-    if (url.length > MAX_URL_LENGTH) {
-      const copied = await copySummary()
-      body = encodeURIComponent(copied ? 'The summary is too long to prefill. It was copied to your clipboard: paste it here.' : '')
-      url = buildUrl(body)
-      setNotice(copied ? 'Summary too long to prefill, so it was copied to your clipboard. Paste it into the email.' : '')
-    } else {
-      setNotice('')
-    }
-
-    if (provider === 'mailto') window.location.href = url
-    else window.open(url, '_blank', 'noopener')
+      ? 'Copied. Paste it into an email or document to get a table.'
+      : 'Could not copy. Use the spreadsheet download instead.')
+    setTimeout(() => setNotice(''), 5000)
   }
 
   function handleDownloadCSV() {
@@ -238,47 +216,26 @@ export default function Summary() {
         </div>
 
         {/* Export actions */}
-        <div className="no-print flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[140px]">
+        <div className="no-print grid grid-cols-2 gap-3">
+          {[
+            { icon: 'email', label: 'Email', hint: 'Send to your team', onClick: openSend },
+            { icon: 'print', label: 'Print', hint: 'Print or save as PDF', onClick: () => window.print() },
+            { icon: 'download', label: 'CSV', hint: 'Download as CSV', onClick: handleDownloadCSV },
+            { icon: 'copy', label: 'Copy', hint: 'Paste anywhere as a table', onClick: handleCopy },
+          ].map(({ icon, label, hint, onClick }) => (
             <button
-              onClick={() => setEmailMenuOpen(o => !o)}
-              aria-expanded={emailMenuOpen}
-              className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium hover:bg-gray-800 transition-colors"
+              key={label}
+              onClick={onClick}
+              className="bg-white border border-gray-200 rounded-2xl px-4 py-5 flex flex-col items-center gap-2 text-center hover:border-gray-900 hover:shadow-sm transition-all"
             >
-              Email Summary ▾
+              <svg viewBox="0 0 24 24" className="w-7 h-7 text-gray-900" fill="none" stroke="currentColor"
+                strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {ICONS[icon]}
+              </svg>
+              <span className="text-sm font-semibold text-gray-900">{label}</span>
+              <span className="text-xs text-gray-400">{hint}</span>
             </button>
-            {emailMenuOpen && (
-              <div className="absolute left-0 right-0 top-full mt-2 z-10 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden divide-y divide-gray-100">
-                {[
-                  { label: 'Send as email…', onClick: openSend },
-                  { label: 'Default mail app', onClick: () => handleEmail('mailto') },
-                  { label: 'Gmail (web)', onClick: () => handleEmail('gmail') },
-                  { label: 'Outlook (web)', onClick: () => handleEmail('outlook') },
-                  { label: 'Copy to clipboard', onClick: handleCopy },
-                ].map(({ label, onClick }) => (
-                  <button
-                    key={label}
-                    onClick={onClick}
-                    className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <button
-            onClick={handleDownloadCSV}
-            className="flex-1 min-w-[140px] bg-white border border-gray-200 text-gray-700 rounded-xl py-3 text-sm font-medium hover:border-gray-400 transition-colors"
-          >
-            Download CSV
-          </button>
-          <button
-            onClick={() => window.print()}
-            className="flex-1 min-w-[140px] bg-white border border-gray-200 text-gray-700 rounded-xl py-3 text-sm font-medium hover:border-gray-400 transition-colors"
-          >
-            Print
-          </button>
+          ))}
         </div>
         {notice && <p className="no-print text-sm text-gray-600 bg-gray-100 rounded-lg px-3 py-2">{notice}</p>}
 
