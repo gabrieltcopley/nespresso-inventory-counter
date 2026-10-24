@@ -14,7 +14,7 @@ const LINE_DEFAULTS = {
 // the line's standard for those fields. `lines` limits a rule to those lines (omit it for any line).
 // To add or change one, edit this list.
 const NAME_OVERRIDES = [
-  { names: ['COLD BREW STYLE', 'ALTO AMBRATO', 'ALGO ONICE', 'POUR-OVER STYLE'], capsules_per_sleeve: '7' },
+  { names: ['COLD BREW STYLE', 'ALTO AMBRATO', 'ALTO ONICE', 'POUR-OVER STYLE'], capsules_per_sleeve: '7' },
   { names: ['RISTRETTO', 'DIAVOLITTO', 'ALTISSIO', 'ORAFIO', 'VOLTESSO'], lines: ['vertuo'], sleeves_per_case: '9' },
 ]
 
