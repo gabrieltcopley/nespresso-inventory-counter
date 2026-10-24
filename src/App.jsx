@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { SessionProvider } from './hooks/useSession'
 import Login from './pages/Login'
@@ -15,6 +16,13 @@ function Spinner() {
       Loading…
     </div>
   )
+}
+
+// The router keeps the previous page's scroll offset; start every page at the top
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => { window.scrollTo(0, 0) }, [pathname])
+  return null
 }
 
 function ProtectedRoute() {
@@ -37,6 +45,7 @@ export default function App() {
     <AuthProvider>
       <SessionProvider>
         <BrowserRouter>
+          <ScrollToTop />
           <Routes>
             <Route path="/login"          element={<Login />} />
             <Route path="/signup"         element={<Signup />} />
