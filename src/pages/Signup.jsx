@@ -52,7 +52,7 @@ export default function Signup() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-sm">
         <h1 className="text-xl font-bold text-gray-900 mb-1">Create account</h1>
-        <p className="text-sm text-gray-400 mb-6">@nespresso.com email required</p>
+        <p className="text-sm text-gray-400 mb-6">Access is limited to approved email addresses</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

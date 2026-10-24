@@ -11,6 +11,8 @@ See [.env.example](.env.example).
 | `DATABASE_URL` | Reference the Railway Postgres variable. Schema is applied on startup. |
 | `JWT_SECRET` | Long random string: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
 | `ADMIN_EMAILS` | Comma-separated. These can sign up and access `/admin`. |
+| `ALLOWED_EMAIL_DOMAINS` | Domains allowed to sign up, e.g. `nespresso.com,gmail.com`. Defaults to `nespresso.com` if unset. |
+| `ALLOWED_EMAILS` | Individual addresses allowed to sign up, regardless of domain. |
 | `RESEND_API_KEY` | Optional. Without it, confirmation/reset links are printed to the server log. |
 | `EMAIL_FROM` | Sender for Resend (needs a verified domain in production). |
 | `APP_URL` | Public URL, used in email links, e.g. `https://your-app.up.railway.app`. |

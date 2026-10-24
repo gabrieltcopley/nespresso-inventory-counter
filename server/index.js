@@ -26,6 +26,14 @@ if (!JWT_SECRET) throw new Error('JWT_SECRET is required')
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
   .split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
 
+const parseList = value => (value || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+
+// Domains (no @) whose addresses may sign up, plus individual addresses
+const ALLOWED_DOMAINS = process.env.ALLOWED_EMAIL_DOMAINS === undefined
+  ? ['nespresso.com']
+  : parseList(process.env.ALLOWED_EMAIL_DOMAINS).map(d => d.replace(/^@/, ''))
+const ALLOWED_EMAILS = parseList(process.env.ALLOWED_EMAILS)
+
 const pool = new pg.Pool({
   connectionString: DATABASE_URL,
   ssl: isProd && !DATABASE_URL.includes('.railway.internal') ? { rejectUnauthorized: false } : undefined,
@@ -38,7 +46,10 @@ const LINES = ['original', 'vertuo']
 // ---------- helpers ----------
 
 const isAdminEmail = email => ADMIN_EMAILS.includes(email.toLowerCase())
-const isAllowedEmail = email => isAdminEmail(email) || email.toLowerCase().endsWith('@nespresso.com')
+const isAllowedEmail = email => {
+  const e = email.toLowerCase()
+  return isAdminEmail(e) || ALLOWED_EMAILS.includes(e) || ALLOWED_DOMAINS.some(d => e.endsWith(`@${d}`))
+}
 const publicUser = u => ({ id: u.id, email: u.email, full_name: u.full_name, isAdmin: isAdminEmail(u.email) })
 const hashToken = t => crypto.createHash('sha256').update(t).digest('hex')
 const baseUrl = req => APP_URL || `${req.protocol}://${req.get('host')}`
@@ -156,7 +167,7 @@ auth.post('/signup', rateLimit(10), wrap(async (req, res) => {
   const fullName = String(req.body.full_name || '').trim()
 
   if (!email.includes('@')) return res.status(400).json({ error: 'Enter a valid email address.' })
-  if (!isAllowedEmail(email)) return res.status(400).json({ error: 'Only @nespresso.com email addresses are allowed.' })
+  if (!isAllowedEmail(email)) return res.status(400).json({ error: 'Sign-up is not available for this email address.' })
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' })
 
   const hash = await bcrypt.hash(password, 10)
