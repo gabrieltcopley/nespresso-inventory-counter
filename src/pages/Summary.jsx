@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../hooks/useSession'
 import { useAuth } from '../hooks/useAuth'
@@ -15,6 +15,30 @@ const ICONS = {
 
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 
+const COLUMNS = [
+  { key: 'sku', label: 'SKU', get: e => e.product.sku },
+  { key: 'name', label: 'Flavor', get: e => e.product.name },
+  { key: 'line', label: 'Line', get: e => e.product.line },
+  { key: 'fullCases', label: 'Full Cases', get: e => e.fullCases, numeric: true },
+  { key: 'looseSleeves', label: 'Loose Sleeves', get: e => e.looseSleeves, numeric: true },
+  { key: 'totalCapsules', label: 'Total', get: e => e.totalCapsules, numeric: true },
+]
+
+// Ignores case, and compares digit runs as numbers so "0001111" sorts before "111222"
+const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
+const compareValues = (a, b, numeric) => (numeric ? a - b : collator.compare(String(a), String(b)))
+
+// Whatever column is chosen, ties fall back to flavor, then line, then SKU,
+// so the same flavor and line always sit together
+function compareEntries(a, b, sort) {
+  const col = COLUMNS.find(c => c.key === sort.key)
+  const primary = compareValues(col.get(a), col.get(b), col.numeric) * (sort.dir === 'asc' ? 1 : -1)
+  return primary
+    || compareValues(a.product.name, b.product.name)
+    || compareValues(a.product.line, b.product.line)
+    || compareValues(a.product.sku, b.product.sku)
+}
+
 export default function Summary() {
   const navigate = useNavigate()
   const { entries, clearSession } = useSession()
@@ -25,8 +49,22 @@ export default function Summary() {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
   const [sendResult, setSendResult] = useState(null)
+  const [sort, setSort] = useState({ key: 'name', dir: 'asc' })
   const sessionDate = new Date().toLocaleString()
   const grandTotal = entries.reduce((sum, e) => sum + e.totalCapsules, 0)
+
+  // The counting screen keeps its own order; only this page's view and exports are sorted
+  const sortedEntries = useMemo(
+    () => [...entries].sort((a, b) => compareEntries(a, b, sort)),
+    [entries, sort],
+  )
+
+  function handleSort(col) {
+    setSort(s => s.key === col.key
+      ? { key: col.key, dir: s.dir === 'asc' ? 'desc' : 'asc' }
+      // Counts read most naturally biggest first; text reads A to Z
+      : { key: col.key, dir: col.numeric ? 'desc' : 'asc' })
+  }
 
   if (entries.length === 0) {
     return (
@@ -51,7 +89,7 @@ export default function Summary() {
     const lines = [
       `CoffeeCounter Inventory Count — ${sessionDate}`,
       '',
-      ...entries.map(e =>
+      ...sortedEntries.map(e =>
         `${e.product.name} (${e.product.line}, SKU ${e.product.sku}): ` +
         `${e.fullCases} case${e.fullCases !== 1 ? 's' : ''}, ` +
         `${e.looseSleeves} loose sleeve${e.looseSleeves !== 1 ? 's' : ''} = ${e.totalCapsules} capsules`
@@ -65,14 +103,12 @@ export default function Summary() {
   // A real table, so pasting into an email keeps equal column widths
   function buildHtml() {
     const cell = 'padding:6px 12px;border:1px solid #d1d5db;'
-    const head = ['SKU', 'Line', 'Flavor', 'Full Cases', 'Loose Sleeves', 'Total']
-    const right = new Set(['Full Cases', 'Loose Sleeves', 'Total'])
-    const th = head.map(h =>
-      `<th style="${cell}background:#f3f4f6;text-align:${right.has(h) ? 'right' : 'left'};">${h}</th>`).join('')
-    const rows = entries.map(e => `<tr>
+    const th = COLUMNS.map(c =>
+      `<th style="${cell}background:#f3f4f6;text-align:${c.numeric ? 'right' : 'left'};">${c.label}</th>`).join('')
+    const rows = sortedEntries.map(e => `<tr>
       <td style="${cell}">${escapeHtml(e.product.sku)}</td>
-      <td style="${cell}text-transform:capitalize;">${escapeHtml(e.product.line)}</td>
       <td style="${cell}">${escapeHtml(e.product.name)}</td>
+      <td style="${cell}text-transform:capitalize;">${escapeHtml(e.product.line)}</td>
       <td style="${cell}text-align:right;">${e.fullCases}</td>
       <td style="${cell}text-align:right;">${e.looseSleeves}</td>
       <td style="${cell}text-align:right;font-weight:bold;">${e.totalCapsules}</td></tr>`).join('')
@@ -117,7 +153,7 @@ export default function Summary() {
     const { data, error, body } = await api.post('/summary/email', {
       recipients,
       sessionDate,
-      entries: entries.map(e => ({ productId: e.product.id, fullCases: e.fullCases, looseSleeves: e.looseSleeves })),
+      entries: sortedEntries.map(e => ({ productId: e.product.id, fullCases: e.fullCases, looseSleeves: e.looseSleeves })),
     })
     setSending(false)
     if (error) {
@@ -137,9 +173,9 @@ export default function Summary() {
   }
 
   function handleDownloadCSV() {
-    const header = 'Flavor,Line,SKU,Full Cases,Loose Sleeves,Total Capsules\n'
-    const rows = entries
-      .map(e => `"${e.product.name}",${e.product.line},${e.product.sku},${e.fullCases},${e.looseSleeves},${e.totalCapsules}`)
+    const header = 'SKU,Flavor,Line,Full Cases,Loose Sleeves,Total Capsules\n'
+    const rows = sortedEntries
+      .map(e => `${e.product.sku},"${e.product.name}",${e.product.line},${e.fullCases},${e.looseSleeves},${e.totalCapsules}`)
       .join('\n')
     const blob = new Blob([header + rows], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -186,20 +222,34 @@ export default function Summary() {
           <table className="w-full text-sm min-w-[540px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Flavor</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Line</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">SKU</th>
-                <th className="text-right px-4 py-3 font-semibold text-gray-600">Full Cases</th>
-                <th className="text-right px-4 py-3 font-semibold text-gray-600">Loose Sleeves</th>
-                <th className="text-right px-4 py-3 font-semibold text-gray-600">Total</th>
+                {COLUMNS.map(col => {
+                  const active = sort.key === col.key
+                  return (
+                    <th
+                      key={col.key}
+                      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      className={`px-4 py-1 font-semibold text-gray-600 ${col.numeric ? 'text-right' : 'text-left'}`}
+                    >
+                      <button
+                        onClick={() => handleSort(col)}
+                        className={`inline-flex items-center gap-1 min-h-[44px] hover:text-gray-900 transition-colors ${active ? 'text-gray-900' : ''}`}
+                      >
+                        {col.label}
+                        <span aria-hidden="true" className={`no-print text-xs ${active ? 'text-gray-900' : 'text-gray-300'}`}>
+                          {active ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
+                        </span>
+                      </button>
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {entries.map((entry, i) => (
-                <tr key={i}>
+              {sortedEntries.map(entry => (
+                <tr key={entry.product.id}>
+                  <td className="px-4 py-3 text-gray-500">{entry.product.sku}</td>
                   <td className="px-4 py-3 font-medium text-gray-900">{entry.product.name}</td>
                   <td className="px-4 py-3 text-gray-500 capitalize">{entry.product.line}</td>
-                  <td className="px-4 py-3 text-gray-500">{entry.product.sku}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{entry.fullCases}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{entry.looseSleeves}</td>
                   <td className="px-4 py-3 text-right font-semibold text-gray-900">{entry.totalCapsules}</td>

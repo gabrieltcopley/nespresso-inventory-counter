@@ -389,12 +389,12 @@ app.post(
 
     const cell = 'padding:6px 12px;border:1px solid #d1d5db;'
     const right = `${cell}text-align:right;`
-    const head = [['SKU', 'left'], ['Line', 'left'], ['Flavor', 'left'], ['Full Cases', 'right'], ['Loose Sleeves', 'right'], ['Total', 'right']]
+    const head = [['SKU', 'left'], ['Flavor', 'left'], ['Line', 'left'], ['Full Cases', 'right'], ['Loose Sleeves', 'right'], ['Total', 'right']]
       .map(([h, align]) => `<th style="${cell}background:#f3f4f6;text-align:${align};">${h}</th>`).join('')
     const body = rows.map(r => `<tr>
       <td style="${cell}">${escapeHtml(r.p.sku)}</td>
-      <td style="${cell}text-transform:capitalize;">${escapeHtml(r.p.line)}</td>
       <td style="${cell}">${escapeHtml(r.p.name)}</td>
+      <td style="${cell}text-transform:capitalize;">${escapeHtml(r.p.line)}</td>
       <td style="${right}">${r.cases}</td>
       <td style="${right}">${r.loose}</td>
       <td style="${right}font-weight:bold;">${r.total}</td></tr>`).join('')
