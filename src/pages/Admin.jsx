@@ -30,7 +30,7 @@ function parseCSV(text) {
       errors.push(`Row ${i + 1}: capsules_per_sleeve and sleeves_per_case must be positive integers`)
       return
     }
-    rows.push({ name, line: lineVal.toLowerCase(), sku, capsules_per_sleeve: capsNum, sleeves_per_case: sleevesNum })
+    rows.push({ name: name.toUpperCase(), line: lineVal.toLowerCase(), sku, capsules_per_sleeve: capsNum, sleeves_per_case: sleevesNum })
   })
 
   return { rows, errors }

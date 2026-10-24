@@ -9,7 +9,51 @@ const LINE_DEFAULTS = {
   original: { capsules_per_sleeve: '10', sleeves_per_case: '20' },
   vertuo:   { capsules_per_sleeve: '10', sleeves_per_case: '6' },
 }
-const EMPTY_FORM = { name: '', line: 'original', sku: '', ...LINE_DEFAULTS.original }
+
+// Flavors packed differently from the rest of their line. A name that matches overrides
+// the line's standard for those fields. To add or change one, edit this list.
+const NAME_OVERRIDES = [
+  { names: ['COLD BREW STYLE', 'ALTO AMBRATO', 'ALGO ONICE', 'POUR-OVER STYLE'], capsules_per_sleeve: '7' },
+  { names: ['RISTRETTO', 'VOLTESSO'], sleeves_per_case: '9' },
+]
+
+// Names match ignoring case, extra spaces, and hyphens vs spaces ("POUR OVER STYLE" = "POUR-OVER STYLE")
+const normalizeName = name => name.toUpperCase().replace(/[-\s]+/g, ' ').trim()
+
+const FIELDS = ['capsules_per_sleeve', 'sleeves_per_case']
+
+// The packing a flavor should start with: its name's override if it has one, otherwise its line's standard
+function packingFor(name, line) {
+  const key = normalizeName(name)
+  const packing = { ...LINE_DEFAULTS[line] }
+  for (const rule of NAME_OVERRIDES) {
+    if (rule.names.some(n => normalizeName(n) === key)) {
+      for (const field of FIELDS) if (rule[field]) packing[field] = rule[field]
+    }
+  }
+  return packing
+}
+
+// Values the form put there itself (as opposed to ones a user typed): safe to replace automatically
+const AUTO_VALUES = Object.fromEntries(FIELDS.map(field => [
+  field,
+  new Set([...Object.values(LINE_DEFAULTS).map(d => d[field]), ...NAME_OVERRIDES.map(r => r[field]).filter(Boolean)]),
+]))
+
+// Recomputes the packing fields after the name or line changes. A field is only replaced if it is
+// empty or still holds an automatic value, so anything the user typed by hand is kept.
+function applyPacking(form, name, line) {
+  const packing = packingFor(name, line)
+  const next = { ...form, name, line }
+  for (const field of FIELDS) {
+    if (form[field] === '' || AUTO_VALUES[field].has(form[field])) next[field] = packing[field]
+  }
+  return next
+}
+
+// Every SKU ends in this, so new ones start with it filled in (users can still delete it)
+const SKU_SUFFIX = '.10'
+const EMPTY_FORM = { name: '', line: 'original', sku: SKU_SUFFIX, ...LINE_DEFAULTS.original }
 
 export default function Catalog() {
   const { user } = useAuth()
@@ -50,19 +94,6 @@ export default function Catalog() {
     fetchProducts()
   }
 
-  // Choosing a line fills in its standard packing wherever a field is empty or still holds
-  // a line's standard value. Anything the user typed themselves is kept.
-  function changeNewLine(line) {
-    setNewProduct(p => {
-      const next = { ...p, line }
-      for (const [field, standard] of Object.entries(LINE_DEFAULTS[line])) {
-        const isStandard = Object.values(LINE_DEFAULTS).some(d => d[field] === p[field])
-        if (p[field] === '' || isStandard) next[field] = standard
-      }
-      return next
-    })
-  }
-
   function startEdit(product) {
     setEditingId(product.id)
     setEditValues({ name: product.name, line: product.line, sku: product.sku, capsules_per_sleeve: product.capsules_per_sleeve, sleeves_per_case: product.sleeves_per_case })
@@ -82,7 +113,7 @@ export default function Catalog() {
     }
     setSaving(true)
     const { error } = await api.put(`/products/${id}`, {
-      name: editValues.name,
+      name: editValues.name.trim().toUpperCase(),
       line: editValues.line,
       sku: editValues.sku,
       capsules_per_sleeve: parseInt(editValues.capsules_per_sleeve),
@@ -93,13 +124,14 @@ export default function Catalog() {
   }
 
   async function addProduct() {
-    if (!newProduct.name || !newProduct.sku || !newProduct.capsules_per_sleeve || !newProduct.sleeves_per_case) {
+    // A SKU that is only the prefilled suffix hasn't been entered yet
+    if (!newProduct.name || !newProduct.sku || newProduct.sku === SKU_SUFFIX || !newProduct.capsules_per_sleeve || !newProduct.sleeves_per_case) {
       setError('All fields are required.')
       return
     }
     setSaving(true)
     const { error } = await api.post('/products', {
-      name: newProduct.name,
+      name: newProduct.name.trim().toUpperCase(),
       line: newProduct.line,
       sku: newProduct.sku,
       capsules_per_sleeve: parseInt(newProduct.capsules_per_sleeve),
@@ -130,15 +162,17 @@ export default function Catalog() {
             <p className="text-sm font-semibold text-gray-700">New Flavor</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <input type="text" placeholder="SKU" value={newProduct.sku}
+                // Put the cursor before the prefilled suffix so the digits can be typed straight away
+                onFocus={e => { const el = e.target; if (el.value === SKU_SUFFIX) setTimeout(() => el.setSelectionRange(0, 0), 0) }}
                 onChange={e => setNewProduct(p => ({ ...p, sku: e.target.value }))}
                 className="col-span-2 sm:col-span-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              <select value={newProduct.line} onChange={e => changeNewLine(e.target.value)}
+              <select value={newProduct.line} onChange={e => setNewProduct(p => applyPacking(p, p.name, e.target.value))}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900">
                 {LINES.map(l => <option key={l} value={l}>{l === 'original' ? 'Original' : 'Vertuo'}</option>)}
               </select>
-              <input type="text" placeholder="Name" value={newProduct.name}
-                onChange={e => setNewProduct(p => ({ ...p, name: e.target.value }))}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              <input type="text" placeholder="Name" value={newProduct.name} autoCapitalize="characters"
+                onChange={e => setNewProduct(p => applyPacking(p, e.target.value, p.line))}
+                className="uppercase border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
               <input type="number" placeholder="Capsules per sleeve" value={newProduct.capsules_per_sleeve}
                 onChange={e => setNewProduct(p => ({ ...p, capsules_per_sleeve: e.target.value }))}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
@@ -180,7 +214,7 @@ export default function Catalog() {
                         {LINES.map(l => <option key={l} value={l}>{l === 'original' ? 'Original' : 'Vertuo'}</option>)}
                       </select>
                       <input value={editValues.name} onChange={e => setEditValues(v => ({ ...v, name: e.target.value }))}
-                        placeholder="Name" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                        placeholder="Name" autoCapitalize="characters" className="uppercase border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                       <input type="number" value={editValues.capsules_per_sleeve} onChange={e => setEditValues(v => ({ ...v, capsules_per_sleeve: e.target.value }))}
                         placeholder="Capsules per sleeve" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                       <input type="number" value={editValues.sleeves_per_case} onChange={e => setEditValues(v => ({ ...v, sleeves_per_case: e.target.value }))}
