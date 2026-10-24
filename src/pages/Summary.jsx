@@ -49,14 +49,35 @@ export default function Summary() {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
   const [sendResult, setSendResult] = useState(null)
+  const [sendContent, setSendContent] = useState('summary')
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' })
   const sessionDate = new Date().toLocaleString()
   const grandTotal = entries.reduce((sum, e) => sum + e.totalCapsules, 0)
 
-  // The counting screen keeps its own order; only this page's view and exports are sorted
+  // The counting screen is a running log; here every count of the same flavor is added together
+  const combinedEntries = useMemo(() => {
+    const byProduct = new Map()
+    for (const e of entries) {
+      const row = byProduct.get(e.product.id)
+      if (row) {
+        row.fullCases += e.fullCases
+        row.looseSleeves += e.looseSleeves
+        row.totalCapsules += e.totalCapsules
+      } else {
+        byProduct.set(e.product.id, {
+          product: e.product,
+          fullCases: e.fullCases,
+          looseSleeves: e.looseSleeves,
+          totalCapsules: e.totalCapsules,
+        })
+      }
+    }
+    return [...byProduct.values()]
+  }, [entries])
+
   const sortedEntries = useMemo(
-    () => [...entries].sort((a, b) => compareEntries(a, b, sort)),
-    [entries, sort],
+    () => [...combinedEntries].sort((a, b) => compareEntries(a, b, sort)),
+    [combinedEntries, sort],
   )
 
   function handleSort(col) {
@@ -153,7 +174,12 @@ export default function Summary() {
     const { data, error, body } = await api.post('/summary/email', {
       recipients,
       sessionDate,
+      include: sendContent,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      // Combined rows in the order shown on screen
       entries: sortedEntries.map(e => ({ productId: e.product.id, fullCases: e.fullCases, looseSleeves: e.looseSleeves })),
+      // Every entry in the order it was added
+      log: entries.map(e => ({ productId: e.product.id, fullCases: e.fullCases, looseSleeves: e.looseSleeves, addedAt: e.addedAt })),
     })
     setSending(false)
     if (error) {
@@ -200,6 +226,11 @@ export default function Summary() {
           <div>
             <h1 className="text-xl font-bold text-gray-900">Session Summary</h1>
             <p className="text-sm text-gray-400 mt-0.5">{sessionDate}</p>
+            {entries.length !== combinedEntries.length && (
+              <p className="no-print text-xs text-gray-400 mt-0.5">
+                {entries.length} entries combined into {combinedEntries.length} flavors. Continue Session shows each entry.
+              </p>
+            )}
           </div>
           <div className="no-print flex items-center gap-2">
             <button
@@ -335,6 +366,40 @@ export default function Summary() {
                       className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
                     />
                   </label>
+                  <fieldset className="space-y-2">
+                    <legend className="text-sm text-gray-600 mb-1">What to include</legend>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'summary', label: 'Summary' },
+                        { id: 'log', label: 'Log' },
+                        { id: 'both', label: 'Both' },
+                      ].map(({ id, label }) => (
+                        <label
+                          key={id}
+                          className={`text-center text-sm font-medium rounded-lg border py-2 cursor-pointer transition-colors ${
+                            sendContent === id ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-300 text-gray-700 hover:border-gray-500'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="send-content"
+                            value={id}
+                            checked={sendContent === id}
+                            onChange={() => setSendContent(id)}
+                            className="sr-only"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      {{
+                        summary: 'Totals combined by flavor, in the order shown on this page.',
+                        log: 'Every entry with the time it was added, in the order entered.',
+                        both: 'The combined summary, followed by the full log.',
+                      }[sendContent]}
+                    </p>
+                  </fieldset>
                   <p className="text-xs text-gray-400">
                     Only approved email domains can receive the summary. Replies go to {user?.email}.
                   </p>

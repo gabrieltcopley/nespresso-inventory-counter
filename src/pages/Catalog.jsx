@@ -4,7 +4,12 @@ import NavBar from '../components/NavBar'
 import { useAuth } from '../hooks/useAuth'
 
 const LINES = ['original', 'vertuo']
-const EMPTY_FORM = { name: '', line: 'original', sku: '', capsules_per_sleeve: '', sleeves_per_case: '' }
+// Every flavor in a line is packed the same way, so the form fills these in for the chosen line
+const LINE_DEFAULTS = {
+  original: { capsules_per_sleeve: '10', sleeves_per_case: '20' },
+  vertuo:   { capsules_per_sleeve: '10', sleeves_per_case: '6' },
+}
+const EMPTY_FORM = { name: '', line: 'original', sku: '', ...LINE_DEFAULTS.original }
 
 export default function Catalog() {
   const { user } = useAuth()
@@ -43,6 +48,19 @@ export default function Catalog() {
     if (error) { setDeleteError(error); return }
     setDeleteTarget(null)
     fetchProducts()
+  }
+
+  // Choosing a line fills in its standard packing wherever a field is empty or still holds
+  // a line's standard value. Anything the user typed themselves is kept.
+  function changeNewLine(line) {
+    setNewProduct(p => {
+      const next = { ...p, line }
+      for (const [field, standard] of Object.entries(LINE_DEFAULTS[line])) {
+        const isStandard = Object.values(LINE_DEFAULTS).some(d => d[field] === p[field])
+        if (p[field] === '' || isStandard) next[field] = standard
+      }
+      return next
+    })
   }
 
   function startEdit(product) {
@@ -114,7 +132,7 @@ export default function Catalog() {
               <input type="text" placeholder="SKU" value={newProduct.sku}
                 onChange={e => setNewProduct(p => ({ ...p, sku: e.target.value }))}
                 className="col-span-2 sm:col-span-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              <select value={newProduct.line} onChange={e => setNewProduct(p => ({ ...p, line: e.target.value }))}
+              <select value={newProduct.line} onChange={e => changeNewLine(e.target.value)}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900">
                 {LINES.map(l => <option key={l} value={l}>{l === 'original' ? 'Original' : 'Vertuo'}</option>)}
               </select>

@@ -111,7 +111,7 @@ export default function Session() {
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
               <span className="text-sm font-semibold text-gray-900">
-                Session — {entries.length} flavor{entries.length !== 1 ? 's' : ''} · {grandTotal} capsules
+                Session — {entries.length} {entries.length !== 1 ? 'entries' : 'entry'} · {grandTotal} capsules
               </span>
               <button
                 onClick={() => navigate('/summary')}
@@ -123,7 +123,7 @@ export default function Session() {
             <div className="divide-y divide-gray-50">
               {entries.map((entry, i) => (
                 editingIndex === i ? (
-                  <div key={entry.product.id} className="px-4 py-3 space-y-3">
+                  <div key={entry.id} className="px-4 py-3 space-y-3">
                     <div>
                       <p className="text-sm font-medium text-gray-900 truncate">{entry.product.name}</p>
                       <p className="text-xs text-gray-500 mt-0.5">
@@ -174,7 +174,7 @@ export default function Session() {
                     </div>
                   </div>
                 ) : (
-                  <div key={entry.product.id} className="px-4 py-3 flex items-center justify-between gap-4">
+                  <div key={entry.id} className="px-4 py-3 flex items-center justify-between gap-4">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{entry.product.name}</p>
                       <p className="text-xs text-gray-500 mt-0.5">
@@ -182,6 +182,10 @@ export default function Session() {
                       </p>
                       <p className="text-xs text-gray-400 mt-0.5">
                         {entry.fullCases} case{entry.fullCases !== 1 ? 's' : ''} · {entry.looseSleeves} loose sleeve{entry.looseSleeves !== 1 ? 's' : ''}
+                        {' · '}
+                        <time dateTime={new Date(entry.addedAt).toISOString()} title={new Date(entry.addedAt).toLocaleString()}>
+                          {new Date(entry.addedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                        </time>
                       </p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">

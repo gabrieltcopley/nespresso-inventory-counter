@@ -336,7 +336,10 @@ app.post(
   requireAuth,
   rateLimit(SUMMARY_EMAILS_PER_HOUR, 60 * 60_000, req => `summary:${req.user.id}`),
   wrap(async (req, res) => {
-    const { recipients, entries, sessionDate } = req.body
+    const { recipients, entries, log, sessionDate } = req.body
+    const include = ['summary', 'log', 'both'].includes(req.body.include) ? req.body.include : 'summary'
+    const wantSummary = include !== 'log'
+    const wantLog = include !== 'summary'
 
     if (!Array.isArray(recipients)) return res.status(400).json({ error: 'Enter at least one recipient.' })
     const unique = [...new Set(recipients.map(r => String(r).trim().toLowerCase()).filter(Boolean))]
@@ -345,13 +348,19 @@ app.post(
       return res.status(400).json({ error: `You can send to at most ${MAX_SUMMARY_RECIPIENTS} recipients at a time.` })
     }
 
-    if (!Array.isArray(entries) || entries.length === 0 || entries.length > 200) {
-      return res.status(400).json({ error: 'There is nothing to send.' })
-    }
-    const counts = entries.map(e => ({ id: e?.productId, cases: Number(e?.fullCases), loose: Number(e?.looseSleeves) }))
+    // Only product ids, counts and times are accepted from the browser; the rest comes from the catalog
     const validCount = n => Number.isInteger(n) && n >= 0 && n <= 100_000
-    if (counts.some(c => !UUID_RE.test(String(c.id)) || !validCount(c.cases) || !validCount(c.loose))) {
-      return res.status(400).json({ error: 'The session data is invalid.' })
+    const parseCounts = (list, max, withTime) => {
+      if (!Array.isArray(list) || list.length === 0 || list.length > max) return null
+      const out = list.map(e => ({ id: e?.productId, cases: Number(e?.fullCases), loose: Number(e?.looseSleeves), at: Number(e?.addedAt) }))
+      const bad = out.some(c => !UUID_RE.test(String(c.id)) || !validCount(c.cases) || !validCount(c.loose)
+        || (withTime && !(Number.isFinite(c.at) && c.at > 0)))
+      return bad ? null : out
+    }
+    const summaryCounts = wantSummary ? parseCounts(entries, 200, false) : []
+    const logCounts = wantLog ? parseCounts(log, 500, true) : []
+    if (!summaryCounts || !logCounts) {
+      return res.status(400).json({ error: 'There is nothing to send, or the session data is invalid.' })
     }
 
     // Allowed recipients get the email; the rest are reported back with a reason
@@ -367,52 +376,77 @@ app.post(
     }
 
     // Rebuild the content from the catalog instead of trusting client-supplied text
-    const { rows: products } = await pool.query('select * from products where id = any($1::uuid[])', [counts.map(c => c.id)])
+    const allCounts = [...summaryCounts, ...logCounts]
+    const { rows: products } = await pool.query('select * from products where id = any($1::uuid[])', [[...new Set(allCounts.map(c => c.id))]])
     const byId = new Map(products.map(p => [p.id, p]))
-    if (counts.some(c => !byId.has(c.id))) {
+    if (allCounts.some(c => !byId.has(c.id))) {
       return res.status(400).json({ error: 'A product in this session was removed from the catalog.' })
     }
-    const rows = counts.map(c => {
+    const toRows = counts => counts.map(c => {
       const p = byId.get(c.id)
       return {
         p,
+        at: c.at,
         cases: c.cases,
         loose: c.loose,
         total: c.cases * p.sleeves_per_case * p.capsules_per_sleeve + c.loose * p.capsules_per_sleeve,
       }
     })
-    const grandTotal = rows.reduce((sum, r) => sum + r.total, 0)
+    const summaryRows = toRows(summaryCounts)
+    const logRows = toRows(logCounts)
+    const grandTotal = (wantSummary ? summaryRows : logRows).reduce((sum, r) => sum + r.total, 0)
+
+    // Times are shown in the sender's time zone; fall back to UTC if it isn't a valid one
+    let timeZone = 'UTC'
+    if (typeof req.body.timeZone === 'string') {
+      try { new Intl.DateTimeFormat('en-US', { timeZone: req.body.timeZone }); timeZone = req.body.timeZone } catch { /* keep UTC */ }
+    }
+    const fmtTime = at => new Date(at).toLocaleString('en-US', { timeZone, dateStyle: 'short', timeStyle: 'short' })
 
     const dateLabel = String(sessionDate || new Date().toLocaleString()).replace(/[\r\n]/g, ' ').slice(0, 100)
     const sender = req.user.full_name || req.user.email
-    const subject = `CoffeeCounter Inventory Count — ${dateLabel}`
+    const subject = `CoffeeCounter Inventory ${include === 'log' ? 'Log' : 'Count'} — ${dateLabel}`
 
     const cell = 'padding:6px 12px;border:1px solid #d1d5db;'
     const right = `${cell}text-align:right;`
-    const head = [['SKU', 'left'], ['Flavor', 'left'], ['Line', 'left'], ['Full Cases', 'right'], ['Loose Sleeves', 'right'], ['Total', 'right']]
+    const headRow = cols => cols
       .map(([h, align]) => `<th style="${cell}background:#f3f4f6;text-align:${align};">${h}</th>`).join('')
-    const body = rows.map(r => `<tr>
+    const countCols = [['Full Cases', 'right'], ['Loose Sleeves', 'right'], ['Total', 'right']]
+    const productCells = r => `
       <td style="${cell}">${escapeHtml(r.p.sku)}</td>
       <td style="${cell}">${escapeHtml(r.p.name)}</td>
       <td style="${cell}text-transform:capitalize;">${escapeHtml(r.p.line)}</td>
       <td style="${right}">${r.cases}</td>
       <td style="${right}">${r.loose}</td>
-      <td style="${right}font-weight:bold;">${r.total}</td></tr>`).join('')
+      <td style="${right}font-weight:bold;">${r.total}</td>`
+    const table = (head, body, footColspan) => `<table style="border-collapse:collapse;"><thead><tr>${head}</tr></thead>
+      <tbody>${body}</tbody><tfoot><tr><td colspan="${footColspan}" style="${cell}font-weight:bold;">Grand Total</td>
+      <td style="${right}font-weight:bold;font-size:16px;">${grandTotal}</td></tr></tfoot></table>`
+    const heading = t => include === 'both' ? `<p style="font-size:14px;font-weight:bold;margin:20px 0 6px;">${t}</p>` : ''
+
+    const summaryHtml = wantSummary
+      ? heading('Summary') + table(
+        headRow([['SKU', 'left'], ['Flavor', 'left'], ['Line', 'left'], ...countCols]),
+        summaryRows.map(r => `<tr>${productCells(r)}</tr>`).join(''),
+        5)
+      : ''
+    const logHtml = wantLog
+      ? heading('Log (in the order entered)') + table(
+        headRow([['Time', 'left'], ['SKU', 'left'], ['Flavor', 'left'], ['Line', 'left'], ...countCols]),
+        logRows.map(r => `<tr><td style="${cell}white-space:nowrap;">${escapeHtml(fmtTime(r.at))}</td>${productCells(r)}</tr>`).join(''),
+        6)
+      : ''
+
     const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111827;">
       <p style="font-size:16px;"><strong>${escapeHtml(subject)}</strong></p>
-      <table style="border-collapse:collapse;"><thead><tr>${head}</tr></thead><tbody>${body}</tbody>
-      <tfoot><tr><td colspan="5" style="${cell}font-weight:bold;">Grand Total</td>
-      <td style="${right}font-weight:bold;font-size:16px;">${grandTotal}</td></tr></tfoot></table>
+      ${summaryHtml}${logHtml}
       <p style="color:#6b7280;font-size:12px;margin-top:16px;">Sent by ${escapeHtml(sender)} (${escapeHtml(req.user.email)}) via CoffeeCounter.</p></div>`
-    const text = [
-      subject,
-      '',
-      ...rows.map(r => `${r.p.name} (${r.p.line}, SKU ${r.p.sku}): ${r.cases} cases, ${r.loose} loose sleeves = ${r.total} capsules`),
-      '',
-      `GRAND TOTAL: ${grandTotal} capsules`,
-      '',
-      `Sent by ${sender} (${req.user.email}) via CoffeeCounter.`,
-    ].join('\n')
+
+    const line = r => `${r.p.name} (${r.p.line}, SKU ${r.p.sku}): ${r.cases} cases, ${r.loose} loose sleeves = ${r.total} capsules`
+    const textParts = [subject, '']
+    if (wantSummary) textParts.push(...(include === 'both' ? ['SUMMARY'] : []), ...summaryRows.map(line), '')
+    if (wantLog) textParts.push(...(include === 'both' ? ['LOG (in the order entered)'] : []), ...logRows.map(r => `${fmtTime(r.at)} — ${line(r)}`), '')
+    const text = [...textParts, `GRAND TOTAL: ${grandTotal} capsules`, '', `Sent by ${sender} (${req.user.email}) via CoffeeCounter.`].join('\n')
 
     // Replies go to the person who sent it, not the no-reply address
     const ok = await sendEmail(to, subject, html, { text, replyTo: req.user.email })
