@@ -48,7 +48,7 @@ export default function Login() {
               <div className="text-4xl mb-4">✉️</div>
               <h2 className="text-lg font-bold text-gray-900 mb-2">Check your email</h2>
               <p className="text-sm text-gray-500 mb-5">
-                If an account exists for <strong>{resetEmail}</strong>, you'll receive a password reset link shortly.
+                If an account exists for <strong>{resetEmail}</strong>, you&apos;ll receive a password reset link shortly.
               </p>
               <button
                 onClick={() => { setShowForgot(false); setResetSent(false); setResetEmail('') }}
@@ -60,7 +60,7 @@ export default function Login() {
           ) : (
             <>
               <h1 className="text-xl font-bold text-gray-900 mb-1">Reset password</h1>
-              <p className="text-sm text-gray-400 mb-6">We'll email you a reset link</p>
+              <p className="text-sm text-gray-400 mb-6">We&apos;ll email you a reset link</p>
               <form onSubmit={handleResetRequest} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>

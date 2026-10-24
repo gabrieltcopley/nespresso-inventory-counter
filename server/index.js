@@ -316,6 +316,8 @@ if (fs.existsSync(dist)) {
   app.get('*', (req, res) => res.sendFile(path.join(dist, 'index.html')))
 }
 
+// Express identifies error handlers by their 4-argument signature
+// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error(err)
   res.status(500).json({ error: 'Something went wrong.' })
