@@ -1,10 +1,16 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../hooks/useSession'
 import NavBar from '../components/NavBar'
 
+// Browsers and mail sites cap URL length, so long summaries are copied instead
+const MAX_URL_LENGTH = 1800
+
 export default function Summary() {
   const navigate = useNavigate()
   const { entries, clearSession } = useSession()
+  const [emailMenuOpen, setEmailMenuOpen] = useState(false)
+  const [notice, setNotice] = useState('')
   const sessionDate = new Date().toLocaleString()
   const grandTotal = entries.reduce((sum, e) => sum + e.totalCapsules, 0)
 
@@ -45,10 +51,43 @@ export default function Summary() {
     return lines.join('\n')
   }
 
-  function handleEmail() {
+  async function copySummary() {
+    try {
+      await navigator.clipboard.writeText(buildPlainText())
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async function handleCopy() {
+    setEmailMenuOpen(false)
+    setNotice((await copySummary()) ? 'Summary copied to clipboard.' : 'Could not copy. Use Download CSV instead.')
+  }
+
+  async function handleEmail(provider) {
+    setEmailMenuOpen(false)
     const subject = encodeURIComponent(`CoffeeCounter Inventory Count — ${sessionDate}`)
-    const body = encodeURIComponent(buildPlainText())
-    window.location.href = `mailto:?subject=${subject}&body=${body}`
+    let body = encodeURIComponent(buildPlainText())
+
+    const buildUrl = body => ({
+      mailto: `mailto:?subject=${subject}&body=${body}`,
+      gmail: `https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`,
+      outlook: `https://outlook.office.com/mail/deeplink/compose?subject=${subject}&body=${body}`,
+    })[provider]
+
+    let url = buildUrl(body)
+    if (url.length > MAX_URL_LENGTH) {
+      const copied = await copySummary()
+      body = encodeURIComponent(copied ? 'The summary is too long to prefill. It was copied to your clipboard: paste it here.' : '')
+      url = buildUrl(body)
+      setNotice(copied ? 'Summary too long to prefill, so it was copied to your clipboard. Paste it into the email.' : '')
+    } else {
+      setNotice('')
+    }
+
+    if (provider === 'mailto') window.location.href = url
+    else window.open(url, '_blank', 'noopener')
   }
 
   function handleDownloadCSV() {
@@ -132,12 +171,33 @@ export default function Summary() {
 
         {/* Export actions */}
         <div className="no-print flex flex-wrap gap-3">
-          <button
-            onClick={handleEmail}
-            className="flex-1 min-w-[140px] bg-gray-900 text-white rounded-xl py-3 text-sm font-medium hover:bg-gray-800 transition-colors"
-          >
-            Email Summary
-          </button>
+          <div className="relative flex-1 min-w-[140px]">
+            <button
+              onClick={() => setEmailMenuOpen(o => !o)}
+              aria-expanded={emailMenuOpen}
+              className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium hover:bg-gray-800 transition-colors"
+            >
+              Email Summary ▾
+            </button>
+            {emailMenuOpen && (
+              <div className="absolute left-0 right-0 top-full mt-2 z-10 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden divide-y divide-gray-100">
+                {[
+                  { label: 'Default mail app', onClick: () => handleEmail('mailto') },
+                  { label: 'Gmail (web)', onClick: () => handleEmail('gmail') },
+                  { label: 'Outlook (web)', onClick: () => handleEmail('outlook') },
+                  { label: 'Copy to clipboard', onClick: handleCopy },
+                ].map(({ label, onClick }) => (
+                  <button
+                    key={label}
+                    onClick={onClick}
+                    className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             onClick={handleDownloadCSV}
             className="flex-1 min-w-[140px] bg-white border border-gray-200 text-gray-700 rounded-xl py-3 text-sm font-medium hover:border-gray-400 transition-colors"
@@ -151,6 +211,7 @@ export default function Summary() {
             Print
           </button>
         </div>
+        {notice && <p className="no-print text-sm text-gray-600 bg-gray-100 rounded-lg px-3 py-2">{notice}</p>}
 
       </div>
     </div>
