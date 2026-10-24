@@ -1,25 +1,17 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { api } from '../lib/api'
+import { useAuth } from '../hooks/useAuth'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
+  const { setSessionUser } = useAuth()
+  const [params] = useSearchParams()
+  const token = params.get('token')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setReady(true)
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') setReady(true)
-    })
-    return () => subscription.unsubscribe()
-  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -33,19 +25,23 @@ export default function ResetPassword() {
       return
     }
     setLoading(true)
-    const { error } = await supabase.auth.updateUser({ password })
+    const { data, error } = await api.post('/auth/reset', { token, password })
     setLoading(false)
     if (error) {
-      setError(error.message)
+      setError(error)
     } else {
+      setSessionUser(data.user)
       navigate('/')
     }
   }
 
-  if (!ready) {
+  if (!token) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-sm text-gray-400">
-        Verifying reset link…
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 text-sm text-gray-500">
+        <p>
+          This reset link is invalid.{' '}
+          <Link to="/login" className="text-gray-900 font-medium hover:underline">Back to sign in</Link>
+        </p>
       </div>
     )
   }

@@ -1,12 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
-
-function isAllowedEmail(email) {
-  const admins = (import.meta.env.VITE_ADMIN_EMAILS || '').split(',').map(e => e.trim())
-  if (admins.includes(email)) return true
-  return email.toLowerCase().endsWith('@nespresso.com')
-}
+import { api } from '../lib/api'
 
 export default function Signup() {
   const [name, setName] = useState('')
@@ -20,25 +14,17 @@ export default function Signup() {
     e.preventDefault()
     setError('')
 
-    if (!isAllowedEmail(email)) {
-      setError('Only @nespresso.com email addresses are allowed.')
-      return
-    }
     if (password.length < 8) {
       setError('Password must be at least 8 characters.')
       return
     }
 
     setLoading(true)
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: name } },
-    })
+    const { error } = await api.post('/auth/signup', { email, password, full_name: name })
     setLoading(false)
 
     if (error) {
-      setError(error.message)
+      setError(error)
     } else {
       setSuccess(true)
     }

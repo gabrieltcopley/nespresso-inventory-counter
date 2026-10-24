@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 import NavBar from '../components/NavBar'
 
 function parseCSV(text) {
@@ -71,30 +71,12 @@ export default function Admin() {
     setImporting(true)
     setImportResult(null)
 
-    let inserted = 0
-    let skipped = 0
-    const errors = []
-
-    for (const row of preview) {
-      if (duplicateAction === 'overwrite') {
-        const { error } = await supabase.from('products').upsert(row, { onConflict: 'sku' })
-        if (error) errors.push(`${row.sku}: ${error.message}`)
-        else inserted++
-      } else {
-        const { data } = await supabase.from('products').select('id').eq('sku', row.sku).maybeSingle()
-        if (data) {
-          skipped++
-        } else {
-          const { error } = await supabase.from('products').insert(row)
-          if (error) errors.push(`${row.sku}: ${error.message}`)
-          else inserted++
-        }
-      }
-    }
+    const { data, error } = await api.post('/products/import', { rows: preview, duplicateAction })
 
     setImporting(false)
-    setImportResult({ inserted, skipped, errors })
-    if (errors.length === 0) { setCsvText(''); setPreview(null) }
+    const result = data || { inserted: 0, skipped: 0, errors: [error] }
+    setImportResult(result)
+    if (result.errors.length === 0) { setCsvText(''); setPreview(null) }
   }
 
   return (
@@ -201,10 +183,8 @@ export default function Admin() {
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-2">User Management</h2>
           <p className="text-sm text-gray-500">
-            Manage user accounts directly in the{' '}
-            <strong className="text-gray-700">Supabase dashboard</strong> under{' '}
-            <em>Authentication → Users</em>. From there you can view accounts,
-            check verification status, and resend confirmation emails.
+            User accounts live in the <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">users</code> table
+            of your Railway Postgres database.
           </p>
         </div>
       </div>

@@ -1,4 +1,22 @@
--- Run this in the Supabase SQL Editor
+-- Applied automatically on server startup (idempotent)
+
+create extension if not exists pgcrypto;
+
+create table if not exists users (
+  id             uuid        primary key default gen_random_uuid(),
+  email          text        not null unique,
+  full_name      text        not null default '',
+  password_hash  text        not null,
+  email_verified boolean     not null default false,
+  created_at     timestamptz not null default now()
+);
+
+create table if not exists auth_tokens (
+  token_hash text        primary key,
+  user_id    uuid        not null references users(id) on delete cascade,
+  type       text        not null check (type in ('verify', 'reset')),
+  expires_at timestamptz not null
+);
 
 create table if not exists products (
   id                  uuid        primary key default gen_random_uuid(),
@@ -19,20 +37,7 @@ begin
 end;
 $$;
 
+drop trigger if exists products_updated_at on products;
 create trigger products_updated_at
   before update on products
   for each row execute function update_updated_at();
-
-alter table products enable row level security;
-
-create policy allow_read on products for select
-  using (auth.role() = 'authenticated');
-
-create policy allow_insert on products for insert
-  with check (auth.role() = 'authenticated');
-
-create policy allow_update on products for update
-  using (auth.role() = 'authenticated');
-
-create policy allow_delete_admin on products for delete
-  using (auth.jwt() ->> 'email' = current_setting('app.admin_email', true));

@@ -28,8 +28,7 @@ function AdminRoute() {
   const { user, loading } = useAuth()
   if (loading) return <Spinner />
   if (!user) return <Navigate to="/login" replace />
-  const admins = (import.meta.env.VITE_ADMIN_EMAILS || '').split(',').map(e => e.trim())
-  if (!admins.includes(user.email)) return <Navigate to="/" replace />
+  if (!user.isAdmin) return <Navigate to="/" replace />
   return <Outlet />
 }
 
