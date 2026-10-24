@@ -11,10 +11,11 @@ const LINE_DEFAULTS = {
 }
 
 // Flavors packed differently from the rest of their line. A name that matches overrides
-// the line's standard for those fields. To add or change one, edit this list.
+// the line's standard for those fields. `lines` limits a rule to those lines (omit it for any line).
+// To add or change one, edit this list.
 const NAME_OVERRIDES = [
   { names: ['COLD BREW STYLE', 'ALTO AMBRATO', 'ALGO ONICE', 'POUR-OVER STYLE'], capsules_per_sleeve: '7' },
-  { names: ['RISTRETTO', 'VOLTESSO'], sleeves_per_case: '9' },
+  { names: ['RISTRETTO', 'DIAVOLITTO', 'ALTISSIO', 'ORAFIO', 'VOLTESSO'], lines: ['vertuo'], sleeves_per_case: '9' },
 ]
 
 // Names match ignoring case, extra spaces, and hyphens vs spaces ("POUR OVER STYLE" = "POUR-OVER STYLE")
@@ -27,7 +28,8 @@ function packingFor(name, line) {
   const key = normalizeName(name)
   const packing = { ...LINE_DEFAULTS[line] }
   for (const rule of NAME_OVERRIDES) {
-    if (rule.names.some(n => normalizeName(n) === key)) {
+    const lineMatches = !rule.lines || rule.lines.includes(line)
+    if (lineMatches && rule.names.some(n => normalizeName(n) === key)) {
       for (const field of FIELDS) if (rule[field]) packing[field] = rule[field]
     }
   }
