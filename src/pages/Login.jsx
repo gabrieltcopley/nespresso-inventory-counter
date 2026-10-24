@@ -1,9 +1,13 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { api } from '../lib/api'
+import { useAuth } from '../hooks/useAuth'
 
 export default function Login() {
   const navigate = useNavigate()
+  const { signIn } = useAuth()
+  const [params] = useSearchParams()
+  const verify = params.get('verify')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -18,10 +22,10 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await signIn(email, password)
     setLoading(false)
     if (error) {
-      setError(error.message)
+      setError(error)
     } else {
       navigate('/')
     }
@@ -30,9 +34,7 @@ export default function Login() {
   async function handleResetRequest(e) {
     e.preventDefault()
     setResetLoading(true)
-    await supabase.auth.resetPasswordForEmail(resetEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
+    await api.post('/auth/forgot', { email: resetEmail })
     setResetLoading(false)
     setResetSent(true)
   }
@@ -96,6 +98,13 @@ export default function Login() {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-sm">
         <h1 className="text-xl font-bold text-gray-900 mb-1">Sign in</h1>
         <p className="text-sm text-gray-400 mb-6">Nespresso Inventory Counter</p>
+
+        {verify === 'ok' && (
+          <p className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2 mb-4">Email confirmed. You can sign in now.</p>
+        )}
+        {verify === 'invalid' && (
+          <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-4">That confirmation link is invalid or has expired.</p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

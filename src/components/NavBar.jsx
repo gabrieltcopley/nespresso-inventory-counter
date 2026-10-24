@@ -1,14 +1,13 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 
 export default function NavBar() {
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const navigate = useNavigate()
-  const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL
+  const isAdmin = user?.isAdmin
 
   async function handleSignOut() {
-    await supabase.auth.signOut()
+    await signOut()
     navigate('/login')
   }
 

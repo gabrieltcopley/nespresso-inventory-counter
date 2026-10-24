@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 import { useSession } from '../hooks/useSession'
 import { calcTotalCapsules } from '../lib/calculations'
 import NavBar from '../components/NavBar'
@@ -21,15 +21,10 @@ export default function Session() {
   useEffect(() => {
     if (!selectedLine) return
     setLoadingProducts(true)
-    supabase
-      .from('products')
-      .select('*')
-      .eq('line', selectedLine)
-      .order('name')
-      .then(({ data }) => {
-        setProducts(data || [])
-        setLoadingProducts(false)
-      })
+    api.get(`/products?line=${selectedLine}`).then(({ data }) => {
+      setProducts(data?.products || [])
+      setLoadingProducts(false)
+    })
   }, [selectedLine])
 
   const filteredProducts = products.filter(p => {

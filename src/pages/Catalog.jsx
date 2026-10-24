@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 import NavBar from '../components/NavBar'
 
 const LINES = ['original', 'vertuo']
@@ -20,8 +20,8 @@ export default function Catalog() {
 
   async function fetchProducts() {
     setLoading(true)
-    const { data } = await supabase.from('products').select('*').order('line').order('name')
-    setProducts(data || [])
+    const { data } = await api.get('/products')
+    setProducts(data?.products || [])
     setLoading(false)
   }
 
@@ -48,16 +48,15 @@ export default function Catalog() {
       return
     }
     setSaving(true)
-    const { error } = await supabase.from('products').update({
+    const { error } = await api.put(`/products/${id}`, {
       name: editValues.name,
       line: editValues.line,
       sku: editValues.sku,
       capsules_per_sleeve: parseInt(editValues.capsules_per_sleeve),
       sleeves_per_case: parseInt(editValues.sleeves_per_case),
-      updated_at: new Date().toISOString(),
-    }).eq('id', id)
+    })
     setSaving(false)
-    if (error) { setError(error.message) } else { cancelEdit(); fetchProducts() }
+    if (error) { setError(error) } else { cancelEdit(); fetchProducts() }
   }
 
   async function addProduct() {
@@ -66,7 +65,7 @@ export default function Catalog() {
       return
     }
     setSaving(true)
-    const { error } = await supabase.from('products').insert({
+    const { error } = await api.post('/products', {
       name: newProduct.name,
       line: newProduct.line,
       sku: newProduct.sku,
@@ -74,7 +73,7 @@ export default function Catalog() {
       sleeves_per_case: parseInt(newProduct.sleeves_per_case),
     })
     setSaving(false)
-    if (error) { setError(error.message) } else { setNewProduct(EMPTY_FORM); setShowAddForm(false); setError(''); fetchProducts() }
+    if (error) { setError(error) } else { setNewProduct(EMPTY_FORM); setShowAddForm(false); setError(''); fetchProducts() }
   }
 
   return (
