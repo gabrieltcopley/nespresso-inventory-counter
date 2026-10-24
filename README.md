@@ -22,7 +22,7 @@ See [.env.example](.env.example).
 Needs a Postgres database (local, or a Railway one via its public URL).
 
 ```
-cp .env.example .env   # fill in, then load into your shell
+cp .env.example .env   # fill in; npm run dev loads it automatically (Node 22.9+)
 npm install
 npm run dev            # API on :3000, Vite on :5173 (proxies /api)
 ```

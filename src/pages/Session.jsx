@@ -117,14 +117,19 @@ export default function Session() {
                 onClick={() => navigate('/summary')}
                 className="bg-gray-900 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors"
               >
-                End Session
+                View Totals
               </button>
             </div>
             <div className="divide-y divide-gray-50">
               {entries.map((entry, i) => (
                 editingIndex === i ? (
                   <div key={entry.product.id} className="px-4 py-3 space-y-3">
-                    <p className="text-sm font-medium text-gray-900 truncate">{entry.product.name}</p>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 truncate">{entry.product.name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        <span className="capitalize">{entry.product.line}</span> · SKU {entry.product.sku}
+                      </p>
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <label className="text-xs text-gray-500">
                         Full cases
@@ -172,6 +177,9 @@ export default function Session() {
                   <div key={entry.product.id} className="px-4 py-3 flex items-center justify-between gap-4">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{entry.product.name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        <span className="capitalize">{entry.product.line}</span> · SKU {entry.product.sku}
+                      </p>
                       <p className="text-xs text-gray-400 mt-0.5">
                         {entry.fullCases} case{entry.fullCases !== 1 ? 's' : ''} · {entry.looseSleeves} loose sleeve{entry.looseSleeves !== 1 ? 's' : ''}
                       </p>

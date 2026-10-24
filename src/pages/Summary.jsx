@@ -80,12 +80,20 @@ export default function Summary() {
             <h1 className="text-xl font-bold text-gray-900">Session Summary</h1>
             <p className="text-sm text-gray-400 mt-0.5">{sessionDate}</p>
           </div>
-          <button
-            onClick={handleNewSession}
-            className="no-print text-sm text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:text-gray-900 hover:border-gray-400 transition-colors"
-          >
-            New Session
-          </button>
+          <div className="no-print flex items-center gap-2">
+            <button
+              onClick={() => navigate('/')}
+              className="text-sm text-white bg-gray-900 rounded-lg px-3 py-1.5 hover:bg-gray-800 transition-colors"
+            >
+              Continue Session
+            </button>
+            <button
+              onClick={handleNewSession}
+              className="text-sm text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:text-gray-900 hover:border-gray-400 transition-colors"
+            >
+              New Session
+            </button>
+          </div>
         </div>
 
         {/* Summary table */}
