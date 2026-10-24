@@ -6,6 +6,8 @@ import NavBar from '../components/NavBar'
 // Browsers and mail sites cap URL length, so long summaries are copied instead
 const MAX_URL_LENGTH = 1800
 
+const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+
 export default function Summary() {
   const navigate = useNavigate()
   const { entries, clearSession } = useSession()
@@ -31,29 +33,54 @@ export default function Summary() {
     )
   }
 
+  // One line per flavor, no column alignment: spaces only line up in a fixed-width
+  // font, and mail apps use proportional ones
   function buildPlainText() {
     const lines = [
       `CoffeeCounter Inventory Count — ${sessionDate}`,
       '',
-      'Flavor                   Line        SKU         Cases   Sleeves   Total',
-      '-'.repeat(72),
       ...entries.map(e =>
-        e.product.name.padEnd(25) +
-        e.product.line.padEnd(12) +
-        e.product.sku.padEnd(12) +
-        String(e.fullCases).padEnd(8) +
-        String(e.looseSleeves).padEnd(10) +
-        e.totalCapsules
+        `${e.product.name} (${e.product.line}, SKU ${e.product.sku}): ` +
+        `${e.fullCases} case${e.fullCases !== 1 ? 's' : ''}, ` +
+        `${e.looseSleeves} loose sleeve${e.looseSleeves !== 1 ? 's' : ''} = ${e.totalCapsules} capsules`
       ),
-      '-'.repeat(72),
+      '',
       `GRAND TOTAL: ${grandTotal} capsules`,
     ]
     return lines.join('\n')
   }
 
+  // A real table, so pasting into an email keeps equal column widths
+  function buildHtml() {
+    const cell = 'padding:6px 12px;border:1px solid #d1d5db;'
+    const head = ['SKU', 'Line', 'Flavor', 'Full Cases', 'Loose Sleeves', 'Total']
+    const right = new Set(['Full Cases', 'Loose Sleeves', 'Total'])
+    const th = head.map(h =>
+      `<th style="${cell}background:#f3f4f6;text-align:${right.has(h) ? 'right' : 'left'};">${h}</th>`).join('')
+    const rows = entries.map(e => `<tr>
+      <td style="${cell}">${escapeHtml(e.product.sku)}</td>
+      <td style="${cell}text-transform:capitalize;">${escapeHtml(e.product.line)}</td>
+      <td style="${cell}">${escapeHtml(e.product.name)}</td>
+      <td style="${cell}text-align:right;">${e.fullCases}</td>
+      <td style="${cell}text-align:right;">${e.looseSleeves}</td>
+      <td style="${cell}text-align:right;font-weight:bold;">${e.totalCapsules}</td></tr>`).join('')
+    return `<p><strong>CoffeeCounter Inventory Count — ${escapeHtml(sessionDate)}</strong></p>
+      <table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;">
+      <thead><tr>${th}</tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="5" style="${cell}font-weight:bold;">Grand Total</td>
+      <td style="${cell}text-align:right;font-weight:bold;">${grandTotal}</td></tr></tfoot></table>`
+  }
+
   async function copySummary() {
     try {
-      await navigator.clipboard.writeText(buildPlainText())
+      if (window.ClipboardItem) {
+        await navigator.clipboard.write([new window.ClipboardItem({
+          'text/plain': new Blob([buildPlainText()], { type: 'text/plain' }),
+          'text/html': new Blob([buildHtml()], { type: 'text/html' }),
+        })])
+      } else {
+        await navigator.clipboard.writeText(buildPlainText())
+      }
       return true
     } catch {
       return false
@@ -62,7 +89,9 @@ export default function Summary() {
 
   async function handleCopy() {
     setEmailMenuOpen(false)
-    setNotice((await copySummary()) ? 'Summary copied to clipboard.' : 'Could not copy. Use Download CSV instead.')
+    setNotice((await copySummary())
+      ? 'Summary copied. Paste it into an email to get a table.'
+      : 'Could not copy. Use Download CSV instead.')
   }
 
   async function handleEmail(provider) {
