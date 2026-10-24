@@ -15,7 +15,7 @@ const {
   DATABASE_URL,
   JWT_SECRET,
   RESEND_API_KEY,
-  EMAIL_FROM = 'Nespresso Inventory <onboarding@resend.dev>',
+  EMAIL_FROM = 'CoffeeCounter <onboarding@resend.dev>',
   APP_URL,
   PORT = 3000,
 } = process.env

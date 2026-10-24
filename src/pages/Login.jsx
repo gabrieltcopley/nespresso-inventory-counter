@@ -97,7 +97,7 @@ export default function Login() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-sm">
         <h1 className="text-xl font-bold text-gray-900 mb-1">Sign in</h1>
-        <p className="text-sm text-gray-400 mb-6">Nespresso Inventory Counter</p>
+        <p className="text-sm text-gray-400 mb-6">CoffeeCounter</p>
 
         {verify === 'ok' && (
           <p className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2 mb-4">Email confirmed. You can sign in now.</p>

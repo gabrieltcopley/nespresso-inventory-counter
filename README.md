@@ -1,4 +1,4 @@
-# Nespresso Inventory Counter
+# CoffeeCounter
 
 React + Vite frontend, Express API, Postgres. Runs as a single service on Railway: Express serves the API under `/api` and the built frontend.
 

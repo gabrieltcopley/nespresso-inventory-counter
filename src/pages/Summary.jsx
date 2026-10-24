@@ -27,7 +27,7 @@ export default function Summary() {
 
   function buildPlainText() {
     const lines = [
-      `Nespresso Inventory Count — ${sessionDate}`,
+      `CoffeeCounter Inventory Count — ${sessionDate}`,
       '',
       'Flavor                   Line        SKU         Cases   Sleeves   Total',
       '-'.repeat(72),
@@ -46,7 +46,7 @@ export default function Summary() {
   }
 
   function handleEmail() {
-    const subject = encodeURIComponent(`Nespresso Inventory Count — ${sessionDate}`)
+    const subject = encodeURIComponent(`CoffeeCounter Inventory Count — ${sessionDate}`)
     const body = encodeURIComponent(buildPlainText())
     window.location.href = `mailto:?subject=${subject}&body=${body}`
   }
@@ -60,7 +60,7 @@ export default function Summary() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `nespresso-inventory-${new Date().toISOString().split('T')[0]}.csv`
+    a.download = `coffeecounter-inventory-${new Date().toISOString().split('T')[0]}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
