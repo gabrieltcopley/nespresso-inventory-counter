@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { api } from '../lib/api'
 import NavBar from '../components/NavBar'
+import { useAuth } from '../hooks/useAuth'
 
 const LINES = ['original', 'vertuo']
 const EMPTY_FORM = { name: '', line: 'original', sku: '', capsules_per_sleeve: '', sleeves_per_case: '' }
 
 export default function Catalog() {
+  const { user } = useAuth()
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -15,6 +17,9 @@ export default function Catalog() {
   const [newProduct, setNewProduct] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => { fetchProducts() }, [])
 
@@ -29,6 +34,16 @@ export default function Catalog() {
     const q = searchQuery.toLowerCase()
     return p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.line.toLowerCase().includes(q)
   })
+
+  async function confirmDelete() {
+    setDeleting(true)
+    setDeleteError('')
+    const { error } = await api.delete(`/products/${deleteTarget.id}`)
+    setDeleting(false)
+    if (error) { setDeleteError(error); return }
+    setDeleteTarget(null)
+    fetchProducts()
+  }
 
   function startEdit(product) {
     setEditingId(product.id)
@@ -170,10 +185,18 @@ export default function Catalog() {
                         <span className="capitalize">{product.line}</span> · SKU {product.sku} · {product.capsules_per_sleeve} caps/sleeve · {product.sleeves_per_case} sleeves/case
                       </p>
                     </div>
-                    <button onClick={() => startEdit(product)}
-                      className="text-xs text-gray-400 hover:text-gray-900 flex-shrink-0 transition-colors">
-                      Edit
-                    </button>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <button onClick={() => startEdit(product)}
+                        className="text-xs text-gray-400 hover:text-gray-900 transition-colors">
+                        Edit
+                      </button>
+                      {user?.isAdmin && (
+                        <button onClick={() => { setDeleteTarget(product); setDeleteError('') }}
+                          className="text-xs text-red-600 hover:text-red-700 transition-colors">
+                          Delete
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -181,6 +204,29 @@ export default function Catalog() {
           </div>
         )}
       </div>
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div role="dialog" aria-modal="true" className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-sm space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Delete from catalog?</h2>
+            <p className="text-sm text-gray-600">
+              Deleting a product from the catalog removes it for <strong>all users</strong>. This can&apos;t be undone.
+            </p>
+            {deleteError && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{deleteError}</p>}
+            <div className="flex flex-col gap-2">
+              <button onClick={() => setDeleteTarget(null)} disabled={deleting} autoFocus
+                className="w-full border border-gray-300 text-gray-700 rounded-lg py-2.5 text-sm font-medium hover:border-gray-500 disabled:opacity-50 transition-colors">
+                Back to catalog
+              </button>
+              <button onClick={confirmDelete} disabled={deleting}
+                className="w-full bg-red-600 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors">
+                {deleting ? 'Deleting…' : `Delete ${deleteTarget.name}, ${deleteTarget.sku}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

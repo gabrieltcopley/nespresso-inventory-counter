@@ -194,7 +194,7 @@ export default function Session() {
                       </button>
                       <button
                         onClick={() => handleRemove(i)}
-                        className="text-xs text-gray-300 hover:text-red-400 transition-colors"
+                        className="text-xs text-red-600 hover:text-red-700 transition-colors"
                       >
                         Remove
                       </button>
