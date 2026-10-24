@@ -313,7 +313,7 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }))
 const dist = path.join(__dirname, '..', 'dist')
 if (fs.existsSync(dist)) {
   app.use(express.static(dist))
-  app.get('*', (req, res) => res.sendFile(path.join(dist, 'index.html')))
+  app.get('/{*splat}', (req, res) => res.sendFile(path.join(dist, 'index.html')))
 }
 
 // Express identifies error handlers by their 4-argument signature
