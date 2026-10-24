@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../lib/api'
 import NavBar from '../components/NavBar'
 import { useAuth } from '../hooks/useAuth'
@@ -69,11 +69,18 @@ export default function Catalog() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [added, setAdded] = useState('')
+  const [addedCount, setAddedCount] = useState(0)
+  const skuRef = useRef(null)
 
   useEffect(() => { fetchProducts() }, [])
 
-  async function fetchProducts() {
-    setLoading(true)
+  // After a flavor is saved, put the cursor back in the SKU box ready for the next one
+  useEffect(() => { if (addedCount > 0) skuRef.current?.focus() }, [addedCount])
+
+  // silent: refresh the list without swapping it for the "Loading" message
+  async function fetchProducts({ silent = false } = {}) {
+    if (!silent) setLoading(true)
     const { data } = await api.get('/products')
     setProducts(data?.products || [])
     setLoading(false)
@@ -130,15 +137,24 @@ export default function Catalog() {
       return
     }
     setSaving(true)
+    setAdded('')
+    const name = newProduct.name.trim().toUpperCase()
     const { error } = await api.post('/products', {
-      name: newProduct.name.trim().toUpperCase(),
+      name,
       line: newProduct.line,
       sku: newProduct.sku,
       capsules_per_sleeve: parseInt(newProduct.capsules_per_sleeve),
       sleeves_per_case: parseInt(newProduct.sleeves_per_case),
     })
     setSaving(false)
-    if (error) { setError(error) } else { setNewProduct(EMPTY_FORM); setShowAddForm(false); setError(''); fetchProducts() }
+    if (error) { setError(error); return }
+
+    // Stay on the form for the next flavor: keep the chosen line and start a fresh row for it
+    setNewProduct({ ...EMPTY_FORM, line: newProduct.line, ...LINE_DEFAULTS[newProduct.line] })
+    setAdded(`Added ${name} (${newProduct.sku}).`)
+    setAddedCount(c => c + 1)
+    setError('')
+    fetchProducts({ silent: true })
   }
 
   return (
@@ -149,7 +165,7 @@ export default function Catalog() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-900">Product Catalog</h1>
           <button
-            onClick={() => { setShowAddForm(f => !f); setError('') }}
+            onClick={() => { setShowAddForm(f => !f); setError(''); setAdded('') }}
             className="bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors"
           >
             {showAddForm ? 'Cancel' : '+ Add Flavor'}
@@ -161,7 +177,7 @@ export default function Catalog() {
           <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
             <p className="text-sm font-semibold text-gray-700">New Flavor</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <input type="text" placeholder="SKU" value={newProduct.sku}
+              <input type="text" placeholder="SKU" value={newProduct.sku} ref={skuRef}
                 // Put the cursor before the prefilled suffix so the digits can be typed straight away
                 onFocus={e => { const el = e.target; if (el.value === SKU_SUFFIX) setTimeout(() => el.setSelectionRange(0, 0), 0) }}
                 onChange={e => setNewProduct(p => ({ ...p, sku: e.target.value }))}
@@ -181,10 +197,19 @@ export default function Catalog() {
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
             </div>
             {error && !editingId && <p className="text-sm text-red-600">{error}</p>}
-            <button onClick={addProduct} disabled={saving}
-              className="bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors">
-              {saving ? 'Saving…' : 'Save Flavor'}
-            </button>
+            {added && <p role="status" className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">{added}</p>}
+            <div className="flex items-center gap-3">
+              <button onClick={addProduct} disabled={saving}
+                className="bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors">
+                {saving ? 'Saving…' : 'Save Flavor'}
+              </button>
+              {addedCount > 0 && (
+                <button onClick={() => { setShowAddForm(false); setAdded('') }}
+                  className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
+                  Done
+                </button>
+              )}
+            </div>
           </div>
         )}
 
