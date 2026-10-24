@@ -96,20 +96,20 @@ export default function Catalog() {
           <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
             <p className="text-sm font-semibold text-gray-700">New Flavor</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <input type="text" placeholder="Name" value={newProduct.name}
-                onChange={e => setNewProduct(p => ({ ...p, name: e.target.value }))}
+              <input type="text" placeholder="SKU" value={newProduct.sku}
+                onChange={e => setNewProduct(p => ({ ...p, sku: e.target.value }))}
                 className="col-span-2 sm:col-span-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
               <select value={newProduct.line} onChange={e => setNewProduct(p => ({ ...p, line: e.target.value }))}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900">
                 {LINES.map(l => <option key={l} value={l}>{l === 'original' ? 'Original' : 'Vertuo'}</option>)}
               </select>
-              <input type="text" placeholder="SKU" value={newProduct.sku}
-                onChange={e => setNewProduct(p => ({ ...p, sku: e.target.value }))}
+              <input type="text" placeholder="Name" value={newProduct.name}
+                onChange={e => setNewProduct(p => ({ ...p, name: e.target.value }))}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              <input type="number" placeholder="Capsules / sleeve" value={newProduct.capsules_per_sleeve}
+              <input type="number" placeholder="Capsules per sleeve" value={newProduct.capsules_per_sleeve}
                 onChange={e => setNewProduct(p => ({ ...p, capsules_per_sleeve: e.target.value }))}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              <input type="number" placeholder="Sleeves / case" value={newProduct.sleeves_per_case}
+              <input type="number" placeholder="Sleeves per case" value={newProduct.sleeves_per_case}
                 onChange={e => setNewProduct(p => ({ ...p, sleeves_per_case: e.target.value }))}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
             </div>
@@ -140,18 +140,18 @@ export default function Catalog() {
                 {editingId === product.id ? (
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      <input value={editValues.name} onChange={e => setEditValues(v => ({ ...v, name: e.target.value }))}
-                        placeholder="Name" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                      <input value={editValues.sku} onChange={e => setEditValues(v => ({ ...v, sku: e.target.value }))}
+                        placeholder="SKU" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                       <select value={editValues.line} onChange={e => setEditValues(v => ({ ...v, line: e.target.value }))}
                         className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900">
                         {LINES.map(l => <option key={l} value={l}>{l === 'original' ? 'Original' : 'Vertuo'}</option>)}
                       </select>
-                      <input value={editValues.sku} onChange={e => setEditValues(v => ({ ...v, sku: e.target.value }))}
-                        placeholder="SKU" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                      <input value={editValues.name} onChange={e => setEditValues(v => ({ ...v, name: e.target.value }))}
+                        placeholder="Name" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                       <input type="number" value={editValues.capsules_per_sleeve} onChange={e => setEditValues(v => ({ ...v, capsules_per_sleeve: e.target.value }))}
-                        placeholder="Caps/sleeve" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                        placeholder="Capsules per sleeve" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                       <input type="number" value={editValues.sleeves_per_case} onChange={e => setEditValues(v => ({ ...v, sleeves_per_case: e.target.value }))}
-                        placeholder="Sleeves/case" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                        placeholder="Sleeves per case" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
                     </div>
                     {error && editingId === product.id && <p className="text-sm text-red-600">{error}</p>}
                     <div className="flex gap-2">

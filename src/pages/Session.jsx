@@ -7,7 +7,10 @@ import NavBar from '../components/NavBar'
 
 export default function Session() {
   const navigate = useNavigate()
-  const { entries, addEntry, removeEntry } = useSession()
+  const { entries, addEntry, updateEntry, removeEntry } = useSession()
+  const [editingIndex, setEditingIndex] = useState(null)
+  const [editCases, setEditCases] = useState('')
+  const [editSleeves, setEditSleeves] = useState('')
 
   const [step, setStep] = useState('choose-line')
   const [selectedLine, setSelectedLine] = useState(null)
@@ -66,6 +69,29 @@ export default function Session() {
     setSearchQuery('')
   }
 
+  function startEdit(index) {
+    setEditingIndex(index)
+    setEditCases(String(entries[index].fullCases))
+    setEditSleeves(String(entries[index].looseSleeves))
+  }
+
+  function saveEdit(index) {
+    const fullCases = Math.max(0, parseInt(editCases) || 0)
+    const looseSleeves = Math.max(0, parseInt(editSleeves) || 0)
+    updateEntry(index, {
+      fullCases,
+      looseSleeves,
+      totalCapsules: calcTotalCapsules(entries[index].product, fullCases, looseSleeves),
+    })
+    setEditingIndex(null)
+  }
+
+  function handleRemove(index) {
+    // Indexes shift after a removal, so leave edit mode rather than edit the wrong line
+    setEditingIndex(null)
+    removeEntry(index)
+  }
+
   function handleBack() {
     if (step === 'enter-counts') {
       setStep('select-flavor')
@@ -96,23 +122,77 @@ export default function Session() {
             </div>
             <div className="divide-y divide-gray-50">
               {entries.map((entry, i) => (
-                <div key={i} className="px-4 py-3 flex items-center justify-between gap-4">
-                  <div className="min-w-0">
+                editingIndex === i ? (
+                  <div key={entry.product.id} className="px-4 py-3 space-y-3">
                     <p className="text-sm font-medium text-gray-900 truncate">{entry.product.name}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {entry.fullCases} case{entry.fullCases !== 1 ? 's' : ''} · {entry.looseSleeves} loose sleeve{entry.looseSleeves !== 1 ? 's' : ''}
-                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="text-xs text-gray-500">
+                        Full cases
+                        <input
+                          type="number"
+                          min="0"
+                          value={editCases}
+                          onChange={e => setEditCases(e.target.value)}
+                          autoFocus
+                          className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                        />
+                      </label>
+                      <label className="text-xs text-gray-500">
+                        Loose sleeves
+                        <input
+                          type="number"
+                          min="0"
+                          value={editSleeves}
+                          onChange={e => setEditSleeves(e.target.value)}
+                          className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-400">
+                        New total: <strong className="text-gray-900">{calcTotalCapsules(entry.product, editCases, editSleeves)}</strong> capsules
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => saveEdit(i)}
+                          className="bg-gray-900 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingIndex(null)}
+                          className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="text-sm font-bold text-gray-900">{entry.totalCapsules}</span>
-                    <button
-                      onClick={() => removeEntry(i)}
-                      className="text-xs text-gray-300 hover:text-red-400 transition-colors"
-                    >
-                      Remove
-                    </button>
+                ) : (
+                  <div key={entry.product.id} className="px-4 py-3 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{entry.product.name}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {entry.fullCases} case{entry.fullCases !== 1 ? 's' : ''} · {entry.looseSleeves} loose sleeve{entry.looseSleeves !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className="text-sm font-bold text-gray-900">{entry.totalCapsules}</span>
+                      <button
+                        onClick={() => startEdit(i)}
+                        className="text-xs text-gray-400 hover:text-gray-900 transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleRemove(i)}
+                        className="text-xs text-gray-300 hover:text-red-400 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )
               ))}
             </div>
           </div>
