@@ -56,18 +56,25 @@ const baseUrl = req => APP_URL || `${req.protocol}://${req.get('host')}`
 
 const wrap = fn => (req, res, next) => fn(req, res, next).catch(next)
 
-async function sendEmail(to, subject, html) {
+// `to` is an address or an array. Returns whether the email was accepted for delivery.
+async function sendEmail(to, subject, html, { text, replyTo } = {}) {
   if (!RESEND_API_KEY) {
     console.log(`[email disabled] to=${to} subject="${subject}"\n${html}`)
-    return
+    return true
   }
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: EMAIL_FROM, to, subject, html }),
+    body: JSON.stringify({ from: EMAIL_FROM, to, subject, html, text, reply_to: replyTo }),
   })
-  if (!r.ok) console.error('Resend error', r.status, await r.text())
+  if (!r.ok) {
+    console.error('Resend error', r.status, await r.text())
+    return false
+  }
+  return true
 }
+
+const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 
 async function createToken(userId, type, hours) {
   const token = crypto.randomBytes(32).toString('hex')
@@ -117,18 +124,18 @@ function requireAdmin(req, res, next) {
   next()
 }
 
-// Naive in-memory limiter for auth endpoints (per IP, per minute)
+// Naive in-memory limiter. Defaults to per IP and path, per minute.
 const hits = new Map()
-function rateLimit(max) {
+function rateLimit(max, windowMs = 60_000, keyFn = req => `${req.ip}:${req.path}`) {
   return (req, res, next) => {
-    const key = `${req.ip}:${req.path}`
+    const key = keyFn(req)
     const now = Date.now()
     const entry = hits.get(key)
     if (!entry || entry.reset < now) {
-      hits.set(key, { count: 1, reset: now + 60_000 })
+      hits.set(key, { count: 1, reset: now + windowMs })
       return next()
     }
-    if (++entry.count > max) return res.status(429).json({ error: 'Too many attempts. Try again in a minute.' })
+    if (++entry.count > max) return res.status(429).json({ error: 'Too many attempts. Please try again later.' })
     next()
   }
 }
@@ -316,6 +323,103 @@ products.post('/import', requireAdmin, wrap(async (req, res) => {
 }))
 
 app.use('/api/products', products)
+
+// ----- emailed summary -----
+
+const MAX_SUMMARY_RECIPIENTS = 5
+const SUMMARY_EMAILS_PER_HOUR = 10
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+app.post(
+  '/api/summary/email',
+  requireAuth,
+  rateLimit(SUMMARY_EMAILS_PER_HOUR, 60 * 60_000, req => `summary:${req.user.id}`),
+  wrap(async (req, res) => {
+    const { recipients, entries, sessionDate } = req.body
+
+    if (!Array.isArray(recipients)) return res.status(400).json({ error: 'Enter at least one recipient.' })
+    const unique = [...new Set(recipients.map(r => String(r).trim().toLowerCase()).filter(Boolean))]
+    if (unique.length === 0) return res.status(400).json({ error: 'Enter at least one recipient.' })
+    if (unique.length > MAX_SUMMARY_RECIPIENTS) {
+      return res.status(400).json({ error: `You can send to at most ${MAX_SUMMARY_RECIPIENTS} recipients at a time.` })
+    }
+
+    if (!Array.isArray(entries) || entries.length === 0 || entries.length > 200) {
+      return res.status(400).json({ error: 'There is nothing to send.' })
+    }
+    const counts = entries.map(e => ({ id: e?.productId, cases: Number(e?.fullCases), loose: Number(e?.looseSleeves) }))
+    const validCount = n => Number.isInteger(n) && n >= 0 && n <= 100_000
+    if (counts.some(c => !UUID_RE.test(String(c.id)) || !validCount(c.cases) || !validCount(c.loose))) {
+      return res.status(400).json({ error: 'The session data is invalid.' })
+    }
+
+    // Allowed recipients get the email; the rest are reported back with a reason
+    const to = []
+    const rejected = []
+    for (const email of unique) {
+      if (email.length > 254 || !EMAIL_RE.test(email)) rejected.push({ email, reason: 'Not a valid email address.' })
+      else if (!isAllowedEmail(email)) rejected.push({ email, reason: 'Its domain is not approved for CoffeeCounter.' })
+      else to.push(email)
+    }
+    if (to.length === 0) {
+      return res.status(400).json({ error: 'None of the recipients are allowed, so nothing was sent.', sent: [], rejected })
+    }
+
+    // Rebuild the content from the catalog instead of trusting client-supplied text
+    const { rows: products } = await pool.query('select * from products where id = any($1::uuid[])', [counts.map(c => c.id)])
+    const byId = new Map(products.map(p => [p.id, p]))
+    if (counts.some(c => !byId.has(c.id))) {
+      return res.status(400).json({ error: 'A product in this session was removed from the catalog.' })
+    }
+    const rows = counts.map(c => {
+      const p = byId.get(c.id)
+      return {
+        p,
+        cases: c.cases,
+        loose: c.loose,
+        total: c.cases * p.sleeves_per_case * p.capsules_per_sleeve + c.loose * p.capsules_per_sleeve,
+      }
+    })
+    const grandTotal = rows.reduce((sum, r) => sum + r.total, 0)
+
+    const dateLabel = String(sessionDate || new Date().toLocaleString()).replace(/[\r\n]/g, ' ').slice(0, 100)
+    const sender = req.user.full_name || req.user.email
+    const subject = `CoffeeCounter Inventory Count — ${dateLabel}`
+
+    const cell = 'padding:6px 12px;border:1px solid #d1d5db;'
+    const right = `${cell}text-align:right;`
+    const head = [['SKU', 'left'], ['Line', 'left'], ['Flavor', 'left'], ['Full Cases', 'right'], ['Loose Sleeves', 'right'], ['Total', 'right']]
+      .map(([h, align]) => `<th style="${cell}background:#f3f4f6;text-align:${align};">${h}</th>`).join('')
+    const body = rows.map(r => `<tr>
+      <td style="${cell}">${escapeHtml(r.p.sku)}</td>
+      <td style="${cell}text-transform:capitalize;">${escapeHtml(r.p.line)}</td>
+      <td style="${cell}">${escapeHtml(r.p.name)}</td>
+      <td style="${right}">${r.cases}</td>
+      <td style="${right}">${r.loose}</td>
+      <td style="${right}font-weight:bold;">${r.total}</td></tr>`).join('')
+    const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111827;">
+      <p style="font-size:16px;"><strong>${escapeHtml(subject)}</strong></p>
+      <table style="border-collapse:collapse;"><thead><tr>${head}</tr></thead><tbody>${body}</tbody>
+      <tfoot><tr><td colspan="5" style="${cell}font-weight:bold;">Grand Total</td>
+      <td style="${right}font-weight:bold;font-size:16px;">${grandTotal}</td></tr></tfoot></table>
+      <p style="color:#6b7280;font-size:12px;margin-top:16px;">Sent by ${escapeHtml(sender)} (${escapeHtml(req.user.email)}) via CoffeeCounter.</p></div>`
+    const text = [
+      subject,
+      '',
+      ...rows.map(r => `${r.p.name} (${r.p.line}, SKU ${r.p.sku}): ${r.cases} cases, ${r.loose} loose sleeves = ${r.total} capsules`),
+      '',
+      `GRAND TOTAL: ${grandTotal} capsules`,
+      '',
+      `Sent by ${sender} (${req.user.email}) via CoffeeCounter.`,
+    ].join('\n')
+
+    // Replies go to the person who sent it, not the no-reply address
+    const ok = await sendEmail(to, subject, html, { text, replyTo: req.user.email })
+    if (!ok) return res.status(502).json({ error: 'Could not send the email. Please try again.' })
+    res.json({ sent: to, rejected })
+  }),
+)
 
 // ----- static frontend (production) -----
 

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../hooks/useSession'
+import { useAuth } from '../hooks/useAuth'
+import { api } from '../lib/api'
 import NavBar from '../components/NavBar'
 
 // Browsers and mail sites cap URL length, so long summaries are copied instead
@@ -13,6 +15,12 @@ export default function Summary() {
   const { entries, clearSession } = useSession()
   const [emailMenuOpen, setEmailMenuOpen] = useState(false)
   const [notice, setNotice] = useState('')
+  const { user } = useAuth()
+  const [sendOpen, setSendOpen] = useState(false)
+  const [recipientsText, setRecipientsText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState('')
+  const [sendResult, setSendResult] = useState(null)
   const sessionDate = new Date().toLocaleString()
   const grandTotal = entries.reduce((sum, e) => sum + e.totalCapsules, 0)
 
@@ -85,6 +93,37 @@ export default function Summary() {
     } catch {
       return false
     }
+  }
+
+  function openSend() {
+    setEmailMenuOpen(false)
+    setRecipientsText(user?.email ?? '')
+    setSendError('')
+    setSendResult(null)
+    setSendOpen(true)
+  }
+
+  async function handleSend() {
+    const recipients = recipientsText.split(/[\s,;]+/).filter(Boolean)
+    if (recipients.length === 0) {
+      setSendError('Enter at least one email address.')
+      return
+    }
+    setSending(true)
+    setSendError('')
+    const { data, error, body } = await api.post('/summary/email', {
+      recipients,
+      sessionDate,
+      entries: entries.map(e => ({ productId: e.product.id, fullCases: e.fullCases, looseSleeves: e.looseSleeves })),
+    })
+    setSending(false)
+    if (error) {
+      // When nobody could be sent to, the server still says who was rejected and why
+      if (body?.rejected?.length) setSendResult({ sent: [], rejected: body.rejected })
+      else setSendError(error)
+      return
+    }
+    setSendResult(data)
   }
 
   async function handleCopy() {
@@ -211,6 +250,7 @@ export default function Summary() {
             {emailMenuOpen && (
               <div className="absolute left-0 right-0 top-full mt-2 z-10 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden divide-y divide-gray-100">
                 {[
+                  { label: 'Send as email…', onClick: openSend },
                   { label: 'Default mail app', onClick: () => handleEmail('mailto') },
                   { label: 'Gmail (web)', onClick: () => handleEmail('gmail') },
                   { label: 'Outlook (web)', onClick: () => handleEmail('outlook') },
@@ -241,6 +281,72 @@ export default function Summary() {
           </button>
         </div>
         {notice && <p className="no-print text-sm text-gray-600 bg-gray-100 rounded-lg px-3 py-2">{notice}</p>}
+
+        {/* Send as email */}
+        {sendOpen && (
+          <div className="no-print fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+            <div role="dialog" aria-modal="true" className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md space-y-4">
+              {sendResult ? (
+                <>
+                  <h2 className="text-lg font-bold text-gray-900">
+                    {sendResult.sent.length > 0 ? 'Email sent' : 'Nothing was sent'}
+                  </h2>
+                  {sendResult.sent.length > 0 && (
+                    <p className="text-sm text-green-800 bg-green-50 rounded-lg px-3 py-2">
+                      Sent to {sendResult.sent.join(', ')}.
+                    </p>
+                  )}
+                  {sendResult.rejected.length > 0 && (
+                    <div className="text-sm text-amber-900 bg-amber-50 rounded-lg px-3 py-2 space-y-1">
+                      <p className="font-medium">Not sent:</p>
+                      {sendResult.rejected.map(r => (
+                        <p key={r.email}><strong>{r.email}</strong>: {r.reason}</p>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button onClick={() => setSendOpen(false)}
+                      className="flex-1 bg-gray-900 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-gray-800 transition-colors">
+                      Done
+                    </button>
+                    <button onClick={() => { setSendResult(null); setRecipientsText('') }}
+                      className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2.5 text-sm font-medium hover:border-gray-500 transition-colors">
+                      Send to others
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-lg font-bold text-gray-900">Send as email</h2>
+                  <label className="block text-sm text-gray-600">
+                    Recipients <span className="text-gray-400">(separate with commas, up to 5)</span>
+                    <textarea
+                      rows={3}
+                      value={recipientsText}
+                      onChange={e => setRecipientsText(e.target.value)}
+                      autoFocus
+                      className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    />
+                  </label>
+                  <p className="text-xs text-gray-400">
+                    Only approved email domains can receive the summary. Replies go to {user?.email}.
+                  </p>
+                  {sendError && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{sendError}</p>}
+                  <div className="flex gap-2">
+                    <button onClick={handleSend} disabled={sending}
+                      className="flex-1 bg-gray-900 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors">
+                      {sending ? 'Sending…' : 'Send'}
+                    </button>
+                    <button onClick={() => setSendOpen(false)} disabled={sending}
+                      className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2.5 text-sm font-medium hover:border-gray-500 disabled:opacity-50 transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

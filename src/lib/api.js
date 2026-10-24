@@ -11,7 +11,7 @@ async function request(method, path, body) {
     return { data: null, error: 'Could not reach the server.', status: 0 }
   }
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) return { data: null, error: data.error || 'Request failed.', status: res.status }
+  if (!res.ok) return { data: null, error: data.error || 'Request failed.', status: res.status, body: data }
   return { data, error: null, status: res.status }
 }
 
